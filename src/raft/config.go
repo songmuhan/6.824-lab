@@ -500,8 +500,8 @@ func (cfg *config) nCommitted(index int) (int, interface{}) {
 		cfg.mu.Lock()
 		cmd1, ok := cfg.logs[i][index]
 		cfg.mu.Unlock()
-
 		if ok {
+			Debug(dTest, "**** nCommitted:S%d cmd:%d", i, cmd1)
 			if count > 0 && cmd != cmd1 {
 				cfg.t.Fatalf("committed values do not match: index %v, %v, %v",
 					index, cmd, cmd1)
@@ -572,6 +572,7 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 			cfg.mu.Unlock()
 			if rf != nil {
 				index1, _, ok := rf.Start(cmd)
+				Debug(dTest, "S%d:index1 %d ok:%t", rf.me, index1, ok)
 				if ok {
 					index = index1
 					break
@@ -585,6 +586,7 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 			t1 := time.Now()
 			for time.Since(t1).Seconds() < 2 {
 				nd, cmd1 := cfg.nCommitted(index)
+				Debug(dTest, "count %d cmd:%d", nd, cmd1)
 				if nd > 0 && nd >= expectedServers {
 					// committed
 					if cmd1 == cmd {

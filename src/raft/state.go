@@ -27,5 +27,15 @@ func (rf *Raft) becomeLeaderL() {
 	}
 	rf.state = leader
 	rf.SetElectionTimer()
-	rf.SendAppendsL() // issue heartbeat
+
+	// initialize nextIndex and matchIndex
+	for peer := range rf.peers {
+		if peer != rf.me {
+			// initialized to leader last log index + 1
+			rf.nextIndex[peer] = rf.log.lastIndex() + 1
+			// initialized to 0, increase monotonically
+			rf.matchIndex[peer] = 0
+		}
+	}
+	rf.SendAppendsL(true) // issue heartbeat
 }

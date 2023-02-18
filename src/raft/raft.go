@@ -60,10 +60,19 @@ type Raft struct {
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
-
+	applyCh chan ApplyMsg
+	cond    sync.Cond
 	//persistent state on all servers
-	currentTerm  int
-	voteFor      int
+	currentTerm int
+	voteFor     int
+	log         Log
+	// volatile state on all servers
+	commitIndex int
+	lastApplied int
+	// volatie state on leaders
+	nextIndex  []int
+	matchIndex []int
+	// auxiliary state
 	state        State
 	electionTime time.Time
 }
@@ -142,13 +151,21 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 // term. the third return value is true if this server believes it is
 // the leader.
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
-	index := -1
-	term := -1
-	isLeader := true
-
 	// Your code here (2B).
-
-	return index, term, isLeader
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	index := rf.log.lastIndex()
+	term := rf.currentTerm
+	if rf.state != leader {
+		return -1, -1, false
+	}
+	rf.log.append(Entry{
+		Command: command,
+		Term:    rf.currentTerm,
+	})
+	Debug(dLeader, "S%d: start called, log:%+v", rf.me, rf.log)
+	rf.SendAppendsL(false)
+	return index, term, true
 }
 
 // the tester doesn't halt goroutines created by Raft after each test,
@@ -185,12 +202,17 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.peers = peers
 	rf.persister = persister
 	rf.me = me
-
 	// Your initialization code here (2A, 2B, 2C).
-
+	rf.applyCh = applyCh
+	rf.cond = *sync.NewCond(&rf.mu)
 	rf.currentTerm = 0
 	rf.voteFor = -1
-
+	rf.log.Entries = make([]Entry, 0)
+	rf.log.makeEmptyLog()
+	rf.nextIndex = make([]int, len(rf.peers))
+	rf.matchIndex = make([]int, len(rf.peers))
+	rf.commitIndex = 0
+	rf.lastApplied = 0
 	rf.state = follower
 	rf.mu.Lock()
 	rf.SetElectionTimer()
@@ -200,6 +222,34 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
+	go rf.applier()
 
 	return rf
+}
+
+func (rf *Raft) applier() {
+	for rf.killed() == false {
+		// when to apply ?
+		rf.mu.Lock()
+		Debug(dTimer, "S%d alppier wake T:%d", rf.me, rf.currentTerm)
+		for !(rf.lastApplied < rf.commitIndex) {
+			rf.cond.Wait()
+		}
+
+		var i int
+		for i = rf.lastApplied + 1; i <= rf.commitIndex && i < rf.log.len(); i++ {
+			am := ApplyMsg{
+				CommandValid: true,
+				CommandIndex: i,
+				Command:      rf.log.entry(i).Command,
+			}
+			Debug(dCommit, "S%d apply %d", rf.me, am.CommandIndex)
+			rf.applyCh <- am
+			rf.lastApplied++
+			Debug(dCommit, "S%d inc lastApplied ->%d", rf.me, rf.lastApplied)
+		}
+
+		rf.mu.Unlock()
+
+	}
 }
