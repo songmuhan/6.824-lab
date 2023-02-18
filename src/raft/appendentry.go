@@ -14,11 +14,11 @@ type AppendEntrisReply struct {
 }
 
 func (a *AppendEntrisArgs) String() string {
-	return fmt.Sprintf("T:%d Leader:S%d", a.Term, a.LeaderId)
+	return fmt.Sprintf("{T:%d Leader:S%d}", a.Term, a.LeaderId)
 }
 
 func (a *AppendEntrisReply) String() string {
-	return fmt.Sprintf("T:%d Success:%t", a.Term, a.Success)
+	return fmt.Sprintf("{T:%d Success:%t}", a.Term, a.Success)
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) {
@@ -38,12 +38,12 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 	rf.SetElectionTimer()
 	reply.Term = rf.currentTerm
 
-	Debug(dAppend, "S%d AE -> S%d, reply %v", rf.me, args.LeaderId, reply)
+	Debug(dAppend, "S%d AE -> S%d reply %+v", rf.me, args.LeaderId, reply)
 
 }
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntrisArgs, reply *AppendEntrisReply) bool {
-	Debug(dAppend, "S%d AE -> S%d, arg %v", rf.me, server, args)
+	Debug(dAppend, "S%d AE -> S%d arg %+v", rf.me, server, args)
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
@@ -67,7 +67,7 @@ func (rf *Raft) sendAppend(peer int, args AppendEntrisArgs) {
 	ok := rf.sendAppendEntries(peer, &args, &reply)
 	if ok {
 		rf.mu.Lock()
-		Debug(dAppend, "S%d <- AE S%d, got reply", rf.me, peer)
+		Debug(dAppend, "S%d <- AE S%d got reply", rf.me, peer)
 		defer rf.mu.Unlock()
 		if reply.Term > rf.currentTerm {
 			rf.becomeFollowerL(reply.Term)

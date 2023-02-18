@@ -23,11 +23,11 @@ type RequestVoteReply struct {
 }
 
 func (r *RequestVoteArgs) String() string {
-	return fmt.Sprintf("T:%d Candidate:S%d", r.Term, r.CandidateId)
+	return fmt.Sprintf("{T:%d Candidate:S%d}", r.Term, r.CandidateId)
 }
 
 func (r *RequestVoteReply) String() string {
-	return fmt.Sprintf("T:%d Vote:%t", r.Term, r.VoteGranted)
+	return fmt.Sprintf("{T:%d Vote:%t}", r.Term, r.VoteGranted)
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -58,7 +58,7 @@ func (r *RequestVoteReply) String() string {
 // that the caller passes the address of the reply struct with &, not
 // the struct itself.
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
-	Debug(dVote, "S%d RV -> S%d arg %v", rf.me, server, args)
+	Debug(dVote, "S%d RV -> S%d, arg %+v", rf.me, server, args)
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	return ok
 }
@@ -87,7 +87,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.SetElectionTimer()
 	}
 	reply.Term = rf.currentTerm
-	Debug(dVote, "S%d RV -> S%d, reply %v", rf.me, args.CandidateId, reply)
+	Debug(dVote, "S%d RV -> S%d, reply %+v", rf.me, args.CandidateId, reply)
 
 }
 func (rf *Raft) SendRequestVotesL() {
