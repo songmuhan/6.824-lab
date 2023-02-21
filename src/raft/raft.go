@@ -154,8 +154,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	index := rf.log.lastIndex()
-	term := rf.currentTerm
+
 	if rf.state != leader {
 		return -1, -1, false
 	}
@@ -165,7 +164,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	})
 	Debug(dLeader, "S%d: start called, log:%+v", rf.me, rf.log)
 	rf.SendAppendsL(false)
-	return index, term, true
+	return rf.log.lastIndex(), rf.currentTerm, true
 }
 
 // the tester doesn't halt goroutines created by Raft after each test,
@@ -223,7 +222,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// start ticker goroutine to start elections
 	go rf.ticker()
 	go rf.applier()
-
 	return rf
 }
 
