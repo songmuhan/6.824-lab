@@ -15,8 +15,8 @@ type Log struct {
 
 func (l Log) String() string {
 	str := "[ "
-	for index, entry := range l.Entries {
-		str += fmt.Sprintf("[%d,%d]", index, entry.Term)
+	for _, entry := range l.Entries {
+		str += fmt.Sprintf("[%d]", entry.Term)
 	}
 	str += " ]"
 	return str

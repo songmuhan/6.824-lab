@@ -95,7 +95,7 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 	}
 	if args.LeaderCommit > rf.commitIndex {
 		tmp := min(args.LeaderCommit, rf.log.lastIndex())
-		Debug(dError, "S%d commitIndex:%d -> %d", rf.me, rf.commitIndex, tmp)
+		Debug(dAppend, "S%d follower commitIndex:%d -> %d", rf.me, rf.commitIndex, tmp)
 		rf.commitIndex = tmp
 		rf.cond.Signal()
 	}
@@ -163,11 +163,11 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 			nextIndex := lastLogIndex + entries.len() + 1
 			matchIndex := lastLogIndex + entries.len()
 			if nextIndex > rf.nextIndex[peer] {
-				Debug(dInfo, "S%d: nextIndex S%d [%d -> %d]", rf.me, peer, rf.nextIndex[peer], nextIndex)
+				Debug(dLeader, "S%d: nextIndex S%d [%d -> %d]", rf.me, peer, rf.nextIndex[peer], nextIndex)
 				rf.nextIndex[peer] = nextIndex
 			}
 			if matchIndex > rf.matchIndex[peer] {
-				Debug(dInfo, "S%d: matchIndex S%d [%d -> %d]", rf.me, peer, rf.matchIndex[peer], matchIndex)
+				Debug(dLeader, "S%d: matchIndex S%d [%d -> %d]", rf.me, peer, rf.matchIndex[peer], matchIndex)
 				rf.matchIndex[peer] = matchIndex
 			}
 
@@ -179,7 +179,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 				counter = 1 // leader has a count
 				for peer := range rf.peers {
 					if peer != rf.me {
-						if rf.matchIndex[peer] >= index {
+						if rf.matchIndex[peer] > index {
 							counter++
 						}
 					}
@@ -191,8 +191,8 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 				//		Debug(dInfo, "S%d: next CommitIndex %d", rf.me, index)
 			}
 			if index > commitIndexbeforeRPC {
-				Debug(dAppend, "S%d: matchIndex -> %+v", rf.me, rf.matchIndex)
-				Debug(dAppend, "S%d: commitIndex %d -> %d", rf.me, commitIndexbeforeRPC, index)
+				Debug(dLeader, "S%d: leader matchIndex -> %+v", rf.me, rf.matchIndex)
+				Debug(dLeader, "S%d: leader commitIndex %d -> %d", rf.me, commitIndexbeforeRPC, index)
 				rf.commitIndex = index
 				rf.cond.Signal()
 			}

@@ -229,7 +229,7 @@ func (rf *Raft) applier() {
 	for rf.killed() == false {
 		// when to apply ?
 		rf.mu.Lock()
-		Debug(dTimer, "S%d alppier wake T:%d", rf.me, rf.currentTerm)
+		//		Debug(dTimer, "S%d alppier wake T:%d", rf.me, rf.currentTerm)
 		for !(rf.lastApplied < rf.commitIndex) {
 			rf.cond.Wait()
 		}
