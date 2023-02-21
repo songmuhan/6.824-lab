@@ -60,6 +60,7 @@ func (rf *Raft) findConlict(args *AppendEntrisArgs) (int, int, bool) {
 	if logInsertIndex == args.PrevLogIndex+1 && args.Entires.len() == 0 {
 		return 0, 0, false
 	} else {
+		Debug(dError, "S%d log find conflict!", rf.me)
 		return logInsertIndex, newEntriesIndex, true
 	}
 }
@@ -130,13 +131,13 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 	//	Debug(dError, "entries: %+v", entries)
 	lastLogIndex := rf.nextIndex[peer] - 1
 	commitIndexbeforeRPC := rf.commitIndex
-	Debug(dInfo, "S%d: lastlogIndex:%d log: %+v", rf.me, lastLogIndex, rf.log)
-	if (!heartbeat) && (lastLogIndex < len(rf.log.Entries)-1) {
+	//Debug(dInfo, "S%d: lastlogIndex:%d log: %+v", rf.me, lastLogIndex, rf.log)
+	if (!heartbeat) && lastLogIndex < len(rf.log.Entries)-1 {
 		// do we need deep copy here ??
 		entries.Entries = make([]Entry, len(rf.log.Entries[lastLogIndex+1:]))
 		copy(entries.Entries, rf.log.Entries[lastLogIndex+1:])
 	}
-	Debug(dInfo, "S%d: lastlogIndex:%d entries: %+v", rf.me, lastLogIndex, entries)
+	//Debug(dInfo, "S%d: lastlogIndex:%d entries: %+v", rf.me, lastLogIndex, entries)
 
 	args := AppendEntrisArgs{
 		Term:         rf.currentTerm,
@@ -190,6 +191,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 				}
 				//		Debug(dInfo, "S%d: next CommitIndex %d", rf.me, index)
 			}
+			// todo : do we need to preserve the previous
 			if index > commitIndexbeforeRPC {
 				Debug(dLeader, "S%d: leader matchIndex -> %+v", rf.me, rf.matchIndex)
 				Debug(dLeader, "S%d: leader commitIndex %d -> %d", rf.me, commitIndexbeforeRPC, index)

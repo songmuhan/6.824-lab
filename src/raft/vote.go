@@ -81,8 +81,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if rf.currentTerm < args.Term {
 		rf.becomeFollowerL(args.Term)
 	}
-	uptodate := (args.Term > rf.log.lastTerm()) ||
-		((args.Term == rf.log.lastTerm()) && (args.LastLogIndex >= rf.log.lastIndex()))
+	uptodate := (args.LastLogTerm > rf.log.lastTerm()) ||
+		((args.LastLogTerm == rf.log.lastTerm()) && (args.LastLogIndex >= rf.log.lastIndex()))
 	// check we are still in the same term
 	// why rf.voteFor == args.CandidateId
 	if rf.currentTerm == args.Term &&
