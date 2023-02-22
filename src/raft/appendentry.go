@@ -75,9 +75,15 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 		reply.Term = rf.currentTerm
 		return
 	}
-	if rf.log.len() <= args.PrevLogIndex || rf.log.entry(args.PrevLogIndex).Term != args.PrevLogTerm {
+	if rf.log.len() <= args.PrevLogIndex {
 		Debug(dInfo, "S%d not match PrevLogIndex&Term", rf.me)
 		reply.Term = rf.currentTerm
+		return
+	}
+	if rf.log.entry(args.PrevLogIndex).Term != args.PrevLogTerm {
+		Debug(dInfo, "S%d not match PrevLogIndex&Term", rf.me)
+		reply.Term = rf.currentTerm
+		rf.log.Entries = rf.log.Entries[:args.PrevLogIndex]
 		return
 	}
 	if args.Term > rf.currentTerm {
@@ -94,26 +100,33 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 			}
 		}
 	*/
-	if args.Entires.len() > 0 {
-		existingEntries := rf.log.Entries[args.PrevLogIndex+1:]
-		var i int
-		for i = 0; i < min(len(existingEntries), args.Entires.len()); i++ {
-			if existingEntries[i].Term != args.Entires.term(i) {
-				Debug(dInfo, "S%d ,Discard conflicts: %v", rf.me, rf.log.Entries[args.PrevLogIndex+1+i:])
-				rf.log.Entries = rf.log.Entries[:args.PrevLogIndex+1+i]
-				break
+	/*
+		if args.Entires.len() > 0 {
+			existingEntries := rf.log.Entries[args.PrevLogIndex+1:]
+			var i int
+			for i = 0; i < min(len(existingEntries), args.Entires.len()); i++ {
+				if existingEntries[i].Term != args.Entires.term(i) {
+					Debug(dInfo, "S%d ,Discard conflicts: %v", rf.me, rf.log.Entries[args.PrevLogIndex+1+i:])
+					rf.log.Entries = rf.log.Entries[:args.PrevLogIndex+1+i]
+					break
+				}
+			}
+			if i < args.Entires.len() {
+				// Append any new entries not already in the log
+				rf.log.Entries = append(rf.log.Entries, args.Entires.Entries[i:]...)
 			}
 		}
-		if i < args.Entires.len() {
-			// Append any new entries not already in the log
-			rf.log.Entries = append(rf.log.Entries, args.Entires.Entries[i:]...)
-		}
+	*/
+	if args.Entires.len() > 0 {
+		rf.log.Entries = append(rf.log.Entries[:args.PrevLogIndex+1], args.Entires.Entries...)
 	}
 	if args.LeaderCommit > rf.commitIndex {
 		tmp := min(args.LeaderCommit, rf.log.lastIndex())
-		Debug(dAppend, "S%d follower commitIndex:%d -> %d", rf.me, rf.commitIndex, tmp)
-		rf.commitIndex = tmp
-		rf.cond.Signal()
+		if rf.log.term(tmp) == rf.currentTerm {
+			Debug(dAppend, "S%d follower commitIndex:%d -> %d", rf.me, rf.commitIndex, tmp)
+			rf.commitIndex = tmp
+			rf.cond.Signal()
+		}
 	}
 
 	reply.Term = rf.currentTerm
@@ -167,57 +180,58 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 	//	Debug(dAppend, "args should be : %+v", args)
 	rf.mu.Unlock()
 	reply := AppendEntrisReply{}
-	ok := rf.sendAppendEntries(peer, &args, &reply)
-	if ok {
-		rf.mu.Lock()
-		Debug(dAppend, "S%d <- AE S%d,got reply %+v", rf.me, peer, reply)
-		defer rf.mu.Unlock()
-		if reply.Term > rf.currentTerm {
-			rf.becomeFollowerL(reply.Term)
-		}
-
-		if reply.Success {
-			nextIndex := lastLogIndex + entries.len() + 1
-			matchIndex := lastLogIndex + entries.len()
-			if nextIndex > rf.nextIndex[peer] {
-				//		Debug(dLeader, "S%d: nextIndex S%d [%d -> %d]", rf.me, peer, rf.nextIndex[peer], nextIndex)
-				rf.nextIndex[peer] = nextIndex
+	if rf.state == leader {
+		ok := rf.sendAppendEntries(peer, &args, &reply)
+		if ok {
+			rf.mu.Lock()
+			Debug(dAppend, "S%d <- AE S%d,got reply %+v", rf.me, peer, reply)
+			defer rf.mu.Unlock()
+			if reply.Term > rf.currentTerm {
+				rf.becomeFollowerL(reply.Term)
 			}
-			if matchIndex > rf.matchIndex[peer] {
-				//		Debug(dLeader, "S%d: matchIndex S%d [%d -> %d]", rf.me, peer, rf.matchIndex[peer], matchIndex)
-				rf.matchIndex[peer] = matchIndex
-			}
-			for index := commitIndexbeforeRPC + 1; index <= rf.log.lastIndex(); index++ {
-				if rf.log.term(index) == rf.currentTerm {
-					counter := 1 // leader has a count
-					for peer := range rf.peers {
-						if peer != rf.me {
-							if rf.matchIndex[peer] >= index {
-								counter++
-							}
-						}
 
-					}
-					if counter > len(rf.peers)/2 {
-						Debug(dLeader, "S%d: leader matchIndex -> %+v", rf.me, rf.matchIndex)
-						Debug(dLeader, "S%d: leader commitIndex %d -> %d", rf.me, commitIndexbeforeRPC, index)
-						rf.commitIndex = index
-						rf.cond.Signal()
-					}
+			if reply.Success {
+				nextIndex := lastLogIndex + entries.len() + 1
+				matchIndex := lastLogIndex + entries.len()
+				if nextIndex > rf.nextIndex[peer] {
+					//		Debug(dLeader, "S%d: nextIndex S%d [%d -> %d]", rf.me, peer, rf.nextIndex[peer], nextIndex)
+					rf.nextIndex[peer] = nextIndex
 				}
-				// todo
-				Debug(dInfo, "S%d: next CommitIndex %d", rf.me, index)
+				if matchIndex > rf.matchIndex[peer] {
+					//		Debug(dLeader, "S%d: matchIndex S%d [%d -> %d]", rf.me, peer, rf.matchIndex[peer], matchIndex)
+					rf.matchIndex[peer] = matchIndex
+				}
+				for index := commitIndexbeforeRPC + 1; index <= rf.log.lastIndex(); index++ {
+					if rf.log.term(index) == rf.currentTerm {
+						counter := 1 // leader has a count
+						for peer := range rf.peers {
+							if peer != rf.me {
+								if rf.matchIndex[peer] >= index {
+									counter++
+								}
+							}
+
+						}
+						if counter > len(rf.peers)/2 {
+							Debug(dLeader, "S%d: leader matchIndex -> %+v", rf.me, rf.matchIndex)
+							Debug(dLeader, "S%d: leader commitIndex %d -> %d", rf.me, commitIndexbeforeRPC, index)
+							rf.commitIndex = index
+							rf.cond.Signal()
+						}
+					}
+					// todo
+					Debug(dInfo, "S%d: next CommitIndex %d", rf.me, index)
+				}
+
+				// todo : do we need to preserve the previous
+
+			} else {
+				if rf.nextIndex[peer] > 1 {
+					rf.nextIndex[peer] -= 1
+					Debug(dAppend, "S%d decrease S%d nextIndex to %d", rf.me, peer, rf.nextIndex[peer])
+				}
 			}
 
-			// todo : do we need to preserve the previous
-
-		} else {
-			if rf.nextIndex[peer] > 1 {
-				rf.nextIndex[peer] -= 1
-				Debug(dAppend, "S%d decrease S%d nextIndex to %d", rf.me, peer, rf.nextIndex[peer])
-			}
 		}
-
 	}
-
 }
