@@ -172,8 +172,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 				Debug(dLeader, "S%d: matchIndex S%d [%d -> %d]", rf.me, peer, rf.matchIndex[peer], matchIndex)
 				rf.matchIndex[peer] = matchIndex
 			}
-			index := 0
-			for index = commitIndexbeforeRPC + 1; index < rf.log.lastIndex(); index++ {
+			for index := commitIndexbeforeRPC + 1; index <= rf.log.lastIndex(); index++ {
 				if rf.log.term(index) == rf.currentTerm {
 					counter := 1 // leader has a count
 					for peer := range rf.peers {
@@ -185,7 +184,10 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 
 					}
 					if counter > len(rf.peers)/2 {
-						index++
+						Debug(dLeader, "S%d: leader matchIndex -> %+v", rf.me, rf.matchIndex)
+						Debug(dLeader, "S%d: leader commitIndex %d -> %d", rf.me, commitIndexbeforeRPC, index)
+						rf.commitIndex = index
+						rf.cond.Signal()
 					}
 				}
 				// todo
@@ -193,12 +195,6 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 			}
 
 			// todo : do we need to preserve the previous
-			if index > commitIndexbeforeRPC {
-				Debug(dLeader, "S%d: leader matchIndex -> %+v", rf.me, rf.matchIndex)
-				Debug(dLeader, "S%d: leader commitIndex %d -> %d", rf.me, commitIndexbeforeRPC, index)
-				rf.commitIndex = index
-				rf.cond.Signal()
-			}
 
 		} else {
 			if rf.nextIndex[peer] > 1 {
