@@ -172,15 +172,10 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 				Debug(dLeader, "S%d: matchIndex S%d [%d -> %d]", rf.me, peer, rf.matchIndex[peer], matchIndex)
 				rf.matchIndex[peer] = matchIndex
 			}
-
-			index := commitIndexbeforeRPC // check whether this index is saved in majority
-			counter := 0
-			for i := 0; i < entries.len(); i++ {
-				Debug(dInfo, "S%d entries:%+v, log:%+v", rf.me, entries, rf.log)
-				Debug(dInfo, "S%d: count majority, commitIndex: %d", rf.me, index)
-				Debug(dInfo, "S%d: matchIndex %+v", rf.me, rf.matchIndex)
-				if entries.term(i) == rf.currentTerm {
-					counter = 1 // leader has a count
+			index := 0
+			for index = commitIndexbeforeRPC + 1; index < rf.log.lastIndex(); index++ {
+				if rf.log.term(index) == rf.currentTerm {
+					counter := 1 // leader has a count
 					for peer := range rf.peers {
 						if peer != rf.me {
 							if rf.matchIndex[peer] >= index {
@@ -194,9 +189,9 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 					}
 				}
 				// todo
-				index += lastLogIndex + 1
 				Debug(dInfo, "S%d: next CommitIndex %d", rf.me, index)
 			}
+
 			// todo : do we need to preserve the previous
 			if index > commitIndexbeforeRPC {
 				Debug(dLeader, "S%d: leader matchIndex -> %+v", rf.me, rf.matchIndex)
