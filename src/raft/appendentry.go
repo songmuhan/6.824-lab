@@ -68,7 +68,7 @@ func (rf *Raft) findConflict(args *AppendEntrisArgs) (int, int, bool) {
 func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	Debug(dInfo, "S%d before AE: log -> %+v", rf.me, rf.log)
+	Debug(dInfo, "S%d before AE log: %+v", rf.me, rf.log)
 	// do we need to consider this situation
 	reply.Success = false
 	if args.Term < rf.currentTerm {
@@ -131,9 +131,8 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 
 	reply.Term = rf.currentTerm
 	reply.Success = true
-	Debug(dInfo, "S%d after AE log:%+v", rf.me, rf.log)
 	Debug(dAppend, "S%d AE -> S%d, reply %+v", rf.me, args.LeaderId, reply)
-
+	Debug(dInfo, "S%d after  AE log:%+v", rf.me, rf.log)
 }
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntrisArgs, reply *AppendEntrisReply) bool {
@@ -143,13 +142,15 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntrisArgs, reply *App
 }
 
 func (rf *Raft) SendAppendsL(heartbeat bool) {
-	for peer := range rf.peers {
-		if peer != rf.me {
+	//rf.mu.Lock()
+	for i := 0; i < len(rf.peers); i++ {
+		if i != rf.me {
 			go func(peer int) {
 				rf.sendAppend(peer, heartbeat)
-			}(peer)
+			}(i)
 		}
 	}
+	//rf.mu.Unlock()
 }
 
 func (rf *Raft) sendAppend(peer int, heartbeat bool) {
@@ -157,7 +158,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 
 	rf.mu.Lock()
 	entries := Log{}
-	Debug(dLeader, "S%d log ->[ %+v ]", rf.me, rf.log)
+	//	Debug(dLeader, "S%d log ->[ %+v ]", rf.me, rf.log)
 	lastLogIndex := rf.nextIndex[peer] - 1
 	commitIndexbeforeRPC := rf.commitIndex
 	//Debug(dInfo, "S%d: lastlogIndex:%d log: %+v", rf.me, lastLogIndex, rf.log)
@@ -180,7 +181,8 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 	//	Debug(dAppend, "args should be : %+v", args)
 	rf.mu.Unlock()
 	reply := AppendEntrisReply{}
-	if rf.state == leader {
+	savedTerm := rf.currentTerm
+	if savedTerm == rf.currentTerm {
 		ok := rf.sendAppendEntries(peer, &args, &reply)
 		if ok {
 			rf.mu.Lock()
@@ -188,6 +190,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 			defer rf.mu.Unlock()
 			if reply.Term > rf.currentTerm {
 				rf.becomeFollowerL(reply.Term)
+				return
 			}
 
 			if reply.Success {
@@ -220,7 +223,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 						}
 					}
 					// todo
-					Debug(dInfo, "S%d: next CommitIndex %d", rf.me, index)
+					//Debug(dInfo, "S%d: next CommitIndex %d", rf.me, index)
 				}
 
 				// todo : do we need to preserve the previous

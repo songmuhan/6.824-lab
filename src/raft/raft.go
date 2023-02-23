@@ -162,7 +162,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		Command: command,
 		Term:    rf.currentTerm,
 	})
-	Debug(dLeader, "S%d: start called, log:%+v", rf.me, rf.log)
+	Debug(dError, "S%d: start called, log:%+v", rf.me, rf.log)
 	rf.SendAppendsL(false)
 	return rf.log.lastIndex(), rf.currentTerm, true
 }
