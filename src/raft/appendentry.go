@@ -114,7 +114,7 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 		rf.SetElectionTimer()
 	}
 	Debug(dAppend, "S%d AE -> S%d, reply %+v", rf.me, args.LeaderId, reply)
-	Debug(dInfo, "S%d after  AE log: å%+v", rf.me, rf.log)
+	Debug(dInfo, "S%d after  AE log: %+v", rf.me, rf.log)
 }
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntrisArgs, reply *AppendEntrisReply) bool {
@@ -163,14 +163,14 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 	}
 	//	Debug(dError, "entries: %+v", entries)
 	//	Debug(dAppend, "args should be : %+v", args)
-	rf.mu.Unlock()
 	reply := AppendEntrisReply{}
-	if args.Term == rf.currentTerm {
+	if args.Term == rf.currentTerm && rf.state == leader {
+		rf.mu.Unlock()
 		ok := rf.sendAppendEntries(peer, &args, &reply)
 		if ok {
 			rf.mu.Lock()
-			Debug(dAppend, "S%d <- AE S%d,got reply %+v", rf.me, peer, reply)
 			defer rf.mu.Unlock()
+			Debug(dAppend, "S%d <- AE S%d,got reply %+v", rf.me, peer, reply)
 			if reply.Term > rf.currentTerm {
 				rf.becomeFollowerL(reply.Term)
 				return
@@ -220,11 +220,17 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 
 			}
 		} else {
+			rf.mu.Lock()
 			if rf.state == leader {
 				Debug(dError, "S%d resend AE -> S%d", rf.me, peer)
+				rf.mu.Unlock()
 				rf.sendAppend(peer, heartbeat)
+			} else {
+				rf.mu.Unlock()
 			}
 
 		}
+	} else {
+		rf.mu.Unlock()
 	}
 }
