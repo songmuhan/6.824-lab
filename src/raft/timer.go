@@ -9,9 +9,9 @@ import (
 //	"6.5840/labgob"
 
 const (
-	ElectionTimeMin      = 200
-	ElectionTimeInterval = 150
-	HeartBeatInterval    = 35
+	ElectionTimeMin      = 215
+	ElectionTimeInterval = 215
+	HeartBeatInterval    = 100
 )
 
 func (rf *Raft) SetElectionTimer() {

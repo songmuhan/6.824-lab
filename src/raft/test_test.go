@@ -503,38 +503,36 @@ func TestBackup2B(t *testing.T) {
 	servers := 5
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
-	counter := 100
+
 	cfg.begin("Test (2B): leader backs up quickly over incorrect follower logs")
 
-	cfg.one(counter, servers, true)
+	cfg.one(rand.Int(), servers, true)
 
 	// put leader and one follower in a partition
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect((leader1 + 2) % servers)
 	cfg.disconnect((leader1 + 3) % servers)
 	cfg.disconnect((leader1 + 4) % servers)
-	Debug(dTest, "********************************************** TestBackUp2B: S%d S%d S%d disconnect", (leader1+2)%servers, (leader1+3)%servers, (leader1+4)%servers)
+	Debug(dTest, "********************************* Disconnect %d %d %d", (leader1+2)%servers, (leader1+3)%servers, (leader1+4)%servers)
 	// submit lots of commands that won't commit
-	for i := 0; i < 5; i++ {
-		counter++
-		cfg.rafts[leader1].Start(counter)
+	for i := 0; i < 50; i++ {
+		cfg.rafts[leader1].Start(rand.Int())
 	}
-
+	Debug(dTest, "********************************* 50 commands won't commit")
 	time.Sleep(RaftElectionTimeout / 2)
 
 	cfg.disconnect((leader1 + 0) % servers)
 	cfg.disconnect((leader1 + 1) % servers)
-
-	// allow other partition to recover
+	// allow other partition to recover``
 	cfg.connect((leader1 + 2) % servers)
 	cfg.connect((leader1 + 3) % servers)
 	cfg.connect((leader1 + 4) % servers)
 
 	// lots of successful commands to new group.
-	for i := 0; i < 5; i++ {
-		counter++
-		cfg.one(counter, 3, true)
+	for i := 0; i < 50; i++ {
+		cfg.one(rand.Int(), 3, true)
 	}
+	Debug(dTest, "********************************* 50 commands success commit")
 
 	// now another partitioned leader and one follower
 	leader2 := cfg.checkOneLeader()
@@ -545,9 +543,8 @@ func TestBackup2B(t *testing.T) {
 	cfg.disconnect(other)
 
 	// lots more commands that won't commit
-	for i := 0; i < 5; i++ {
-		counter++
-		cfg.rafts[leader2].Start(counter)
+	for i := 0; i < 50; i++ {
+		cfg.rafts[leader2].Start(rand.Int())
 	}
 
 	time.Sleep(RaftElectionTimeout / 2)
@@ -561,17 +558,16 @@ func TestBackup2B(t *testing.T) {
 	cfg.connect(other)
 
 	// lots of successful commands to new group.
-	for i := 0; i < 5; i++ {
-		counter++
-		cfg.one(counter, 3, true)
+	for i := 0; i < 50; i++ {
+		cfg.one(rand.Int(), 3, true)
 	}
 
 	// now everyone
 	for i := 0; i < servers; i++ {
 		cfg.connect(i)
 	}
-	counter++
-	cfg.one(counter, servers, true)
+	Debug(dTest, "********** here ?")
+	cfg.one(rand.Int(), servers, true)
 
 	cfg.end()
 }
