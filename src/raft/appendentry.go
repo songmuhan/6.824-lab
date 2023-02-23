@@ -127,9 +127,11 @@ func (rf *Raft) SendAppendsL(heartbeat bool) {
 	//rf.mu.Lock()
 	for i := 0; i < len(rf.peers); i++ {
 		if i != rf.me {
-			go func(peer int) {
-				rf.sendAppend(peer, heartbeat)
-			}(i)
+			if rf.log.lastIndex() > rf.nextIndex[i] || heartbeat {
+				go func(peer int) {
+					rf.sendAppend(peer, heartbeat)
+				}(i)
+			}
 		}
 	}
 	//rf.mu.Unlock()
@@ -144,7 +146,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 	lastLogIndex := rf.nextIndex[peer] - 1
 	commitIndexbeforeRPC := rf.commitIndex
 	//Debug(dInfo, "S%d: lastlogIndex:%d log: %+v", rf.me, lastLogIndex, rf.log)
-	if (!heartbeat) && lastLogIndex < len(rf.log.Entries)-1 {
+	if lastLogIndex < len(rf.log.Entries)-1 {
 		// do we need deep copy here ??
 		entries.Entries = make([]Entry, len(rf.log.Entries[lastLogIndex+1:]))
 		copy(entries.Entries, rf.log.Entries[lastLogIndex+1:])
@@ -217,6 +219,12 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 				}
 
 			}
+		} else {
+			if rf.state == leader {
+				Debug(dError, "S%d resend AE -> S%d", rf.me, peer)
+				rf.sendAppend(peer, heartbeat)
+			}
+
 		}
 	}
 }
