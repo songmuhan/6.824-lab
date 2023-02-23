@@ -76,6 +76,7 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 		return
 	}
 	if args.Term == rf.currentTerm {
+		rf.SetElectionTimer()
 		if rf.log.len() <= args.PrevLogIndex || rf.log.entry(args.PrevLogIndex).Term != args.PrevLogTerm {
 			Debug(dInfo, "S%d not match PrevLogIndex&Term", rf.me)
 			reply.Term = rf.currentTerm
@@ -111,7 +112,6 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 		if args.Term > rf.currentTerm {
 			rf.becomeFollowerL(args.Term)
 		}
-		rf.SetElectionTimer()
 	}
 	Debug(dAppend, "S%d AE -> S%d, reply %+v", rf.me, args.LeaderId, reply)
 	Debug(dInfo, "S%d after  AE log: %+v", rf.me, rf.log)
@@ -219,16 +219,6 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 				}
 
 			}
-		} else {
-			rf.mu.Lock()
-			if rf.state == leader {
-				Debug(dError, "S%d resend AE -> S%d", rf.me, peer)
-				rf.mu.Unlock()
-				rf.sendAppend(peer, heartbeat)
-			} else {
-				rf.mu.Unlock()
-			}
-
 		}
 	} else {
 		rf.mu.Unlock()

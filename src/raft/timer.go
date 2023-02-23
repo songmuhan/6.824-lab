@@ -11,7 +11,7 @@ import (
 const (
 	ElectionTimeMin      = 215
 	ElectionTimeInterval = 215
-	HeartBeatInterval    = 100
+	HeartBeatInterval    = 50
 )
 
 func (rf *Raft) SetElectionTimer() {
