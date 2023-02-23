@@ -156,7 +156,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	defer rf.mu.Unlock()
 
 	if rf.state != leader {
-		return -1, -1, false
+		return -1, rf.currentTerm, false
 	}
 	rf.log.append(Entry{
 		Command: command,

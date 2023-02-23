@@ -28,10 +28,9 @@ func (rf *Raft) tick() {
 	if rf.state == leader {
 		rf.SetElectionTimer()
 		rf.SendAppendsL(true)
-	} else {
-		if time.Now().After(rf.electionTime) {
-			rf.startElectionL()
-		}
+	}
+	if time.Now().After(rf.electionTime) {
+		rf.startElectionL()
 	}
 }
 
