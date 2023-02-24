@@ -17,7 +17,10 @@ func (l Log) String() string {
 	str := ""
 	for _, entry := range l.Entries {
 		cmd := fmt.Sprintf("%+v", entry.Command)
-		str += fmt.Sprintf("[%5s %d]", cmd, entry.Term)
+		if len(cmd) > 4 {
+			cmd = cmd[:4]
+		}
+		str += fmt.Sprintf("[%4s %d]", cmd, entry.Term)
 	}
 	return str
 }

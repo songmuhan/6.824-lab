@@ -75,6 +75,9 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 		reply.Term = rf.currentTerm
 		return
 	}
+	if args.Term > rf.currentTerm {
+		rf.becomeFollowerL(args.Term)
+    }
 	if args.Term == rf.currentTerm {
 		rf.SetElectionTimer()
 		if rf.log.len() <= args.PrevLogIndex || rf.log.entry(args.PrevLogIndex).Term != args.PrevLogTerm {
@@ -109,10 +112,8 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 				rf.cond.Signal()
 			}
 		}
-		if args.Term > rf.currentTerm {
-			rf.becomeFollowerL(args.Term)
-		}
 	}
+
 	Debug(dAppend, "S%d AE -> S%d, reply %+v", rf.me, args.LeaderId, reply)
 	Debug(dInfo, "S%d after  AE log: %+v", rf.me, rf.log)
 }

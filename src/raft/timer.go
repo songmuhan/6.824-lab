@@ -9,8 +9,8 @@ import (
 //	"6.5840/labgob"
 
 const (
-	ElectionTimeMin      = 215
-	ElectionTimeInterval = 215
+	ElectionTimeMin      = 200
+	ElectionTimeInterval = 400
 	HeartBeatInterval    = 50
 )
 
