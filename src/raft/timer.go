@@ -11,13 +11,13 @@ import (
 const (
 	ElectionTimeMin      = 200
 	ElectionTimeInterval = 400
-	HeartBeatInterval    = 50
+	HeartBeatInterval    = 70
 )
 
 func (rf *Raft) SetElectionTimer() {
 	Debug(dTimer, "S%d set election timer at T:%d", rf.me, rf.currentTerm)
-	ms := time.Duration(ElectionTimeMin+rand.Int63()%ElectionTimeInterval) * time.Millisecond
 	t := time.Now()
+	ms := time.Duration(ElectionTimeMin+rand.Int63()%ElectionTimeInterval) * time.Millisecond
 	rf.electionTime = t.Add(ms)
 }
 

@@ -70,27 +70,23 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	// got stale vote request, reject
 	reply.VoteGranted = false
+	
+	if rf.currentTerm < args.Term {
+			rf.becomeFollowerL(args.Term)
+			//rf.SetElectionTimer()
+		}
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		return
-	}
-	// for all server, when receving rpc with new Term,
-	// convert to follower
-	if rf.currentTerm < args.Term {
-		rf.becomeFollowerL(args.Term)
-	}
-	uptodate := (args.LastLogTerm > rf.log.lastTerm()) ||
+	}else if rf.currentTerm == args.Term  {
+		uptodate := (args.LastLogTerm > rf.log.lastTerm()) ||
 		((args.LastLogTerm == rf.log.lastTerm()) && (args.LastLogIndex >= rf.log.lastIndex()))
-	// check we are still in the same term
-	// why rf.voteFor == args.CandidateId
-	if rf.currentTerm == args.Term &&
-		(rf.voteFor == -1 || rf.voteFor == args.CandidateId) &&
-		uptodate {
-		rf.voteFor = args.CandidateId
-		reply.VoteGranted = true
-		rf.SetElectionTimer()
+		if (rf.voteFor == -1 || rf.voteFor == args.CandidateId) && uptodate {
+			rf.voteFor = args.CandidateId
+			reply.VoteGranted = true
+			rf.SetElectionTimer()
+		}
 	}
 	reply.Term = rf.currentTerm
 	Debug(dVote, "S%d RV -> S%d, reply %+v", rf.me, args.CandidateId, reply)
@@ -123,6 +119,7 @@ func (rf *Raft) SendRequestVote(peer int, args RequestVoteArgs, voteCounter *int
 		Debug(dVote, "S%d <- RV S%d, got reply", rf.me, peer)
 		if reply.Term > rf.currentTerm {
 			rf.becomeFollowerL(reply.Term)
+			return 
 		}
 		// check whether we are still in the same term and this peer is still candidate
 		sameTermAndState := (args.Term == rf.currentTerm && rf.state == candidate)
