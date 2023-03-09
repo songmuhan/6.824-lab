@@ -37,8 +37,8 @@ func (a AppendEntrisArgs) String() string {
 		entry := " Entries:" + a.Entries.String() + " }"
 		return str + entry
 	*/
-	return fmt.Sprintf("{T:%d Leader:S%d,PrevLog Index:%d Term:%d LeaderCommit:%d, Entries:%+v }",
-		a.Term, a.LeaderId, a.PrevLogIndex, a.PrevLogTerm, a.LeaderCommit, a.Entries)
+	return fmt.Sprintf("{T:%d,Prev[:%d :%d] Commit:%d, Entries:%+v }",
+		a.Term, a.PrevLogIndex, a.PrevLogTerm, a.LeaderCommit, a.Entries)
 }
 
 func (a AppendEntrisReply) String() string {
@@ -56,7 +56,7 @@ func (a AppendEntrisReply) String() string {
 func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	Debug(dInfo, "S%d before AE log: %+v", rf.me, rf.Log)
+	// Debug(dInfo, "S%d before AE log: %+v", rf.me, rf.Log)
 	// do we need to consider this situation
 	reply.Success = false
 	reply.XTerm = -1
@@ -72,14 +72,14 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 	if args.Term == rf.CurrentTerm {
 		rf.SetElectionTimer()
 		if rf.Log.len() <= args.PrevLogIndex {
-			Debug(dInfo, "S%d not match: cuz log is too short", rf.me)
-			reply.XLen = rf.Log.lastIndex()
+			Debug(dInfo, "S%d: log short: len:%d, PIn:%d", rf.me, rf.Log.len(), args.PrevLogIndex)
+			reply.XLen = rf.Log.len()
 			return
 		} else if rf.Log.entry(args.PrevLogIndex).Term != args.PrevLogTerm {
-			Debug(dInfo, "S%d not match: cuz conflict", rf.me)
 			term := rf.Log.term(args.PrevLogIndex)
 			reply.XTerm = term
 			reply.XIndex = rf.Log.getFirstIndexofTerm(term)
+			Debug(dInfo, "S%d not match: cuz conflict, X[%d,%d]", rf.me, term, reply.XIndex)
 			return
 		} else {
 			Debug(dError, "S%d match PreLog{Idx:%d,T:%d}", rf.me, args.PrevLogIndex, args.PrevLogTerm)
@@ -111,7 +111,7 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 		}
 	}
 
-	Debug(dAppend, "S%d AE -> S%d, reply %+v", rf.me, args.LeaderId, reply)
+	//	Debug(dAppend, "S%d AE -> S%d, reply %+v", rf.me, args.LeaderId, reply)
 	Debug(dInfo, "S%d after  AE log: %+v", rf.me, rf.Log)
 }
 
@@ -201,7 +201,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 				} else {
 					if reply.XTerm != -1 {
 						if rf.Log.getLastIndexofTerm(reply.XTerm) != -1 {
-							rf.nextIndex[peer] = rf.Log.getLastIndexofTerm(reply.XTerm)
+							rf.nextIndex[peer] = rf.Log.getLastIndexofTerm(reply.XTerm) + 1
 						} else {
 							rf.nextIndex[peer] = reply.XIndex
 						}

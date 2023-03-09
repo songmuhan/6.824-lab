@@ -15,7 +15,12 @@ type Log struct {
 
 func (l Log) String() string {
 	str := ""
-	for _, entry := range l.Entries {
+	start := 0
+	if len(l.Entries) > 5 {
+		start = len(l.Entries) - 5
+		str = fmt.Sprintf("%d: ...", len(l.Entries))
+	}
+	for _, entry := range l.Entries[start:] {
 		cmd := fmt.Sprintf("%+v", entry.Command)
 		if len(cmd) > 4 {
 			cmd = cmd[:4]

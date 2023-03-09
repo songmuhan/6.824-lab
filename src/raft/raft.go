@@ -194,7 +194,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		Term:    rf.CurrentTerm,
 	})
 	rf.persist()
-	Debug(dError, "S%d: start called, log:%+v", rf.me, rf.Log)
+	Debug(dError, "S%d: start called, [%d,%d]", rf.me, command, rf.CurrentTerm)
 	rf.SendAppendsL(true)
 	return rf.Log.lastIndex(), rf.CurrentTerm, true
 }
@@ -273,12 +273,11 @@ func (rf *Raft) applier() {
 				CommandIndex: i,
 				Command:      rf.Log.entry(i).Command,
 			}
-			Debug(dCommit, "S%d apply %d", rf.me, am.CommandIndex)
+			//			Debug(dCommit, "S%d apply %d", rf.me, am.CommandIndex)
 			rf.applyCh <- am
 			rf.lastApplied++
-			Debug(dCommit, "S%d inc lastApplied ->%d", rf.me, rf.lastApplied)
 		}
-
+		Debug(dCommit, "S%d inc lastApplied ->%d", rf.me, rf.lastApplied)
 		rf.mu.Unlock()
 
 	}
