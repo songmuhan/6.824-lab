@@ -117,10 +117,10 @@ func (rf *Raft) persist() {
 	e.Encode(rf.VoteFor)
 	e.Encode(rf.Log)
 	raftstate := w.Bytes()
-	rf.mu.Unlock()
+	//	rf.mu.Unlock()
 	//	Debug(dError, "S%d can I grab the lock ?", rf.me)
 	rf.persister.Save(raftstate, nil)
-	rf.mu.Lock()
+	// rf.mu.Lock()
 }
 
 // restore previously persisted state.

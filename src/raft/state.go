@@ -38,5 +38,5 @@ func (rf *Raft) becomeLeaderL() {
 			rf.matchIndex[peer] = 0
 		}
 	}
-	rf.SendAppendsL(false) // issue heartbeat
+	rf.SendAppendsL(true) // issue heartbeat
 }
