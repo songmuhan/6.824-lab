@@ -10,8 +10,10 @@ import "fmt"
 // field names must start with capital letters!
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
-	Term        int // candidate's term
-	CandidateId int // candidate requesting vote
+	Term         int // candidate's term
+	CandidateId  int // candidate requesting vote
+	LastLogIndex int // index of candidate's last log entry
+	LastLogTerm  int // term of candidate's last log entry
 }
 
 // example RequestVote RPC reply structure.
@@ -23,11 +25,11 @@ type RequestVoteReply struct {
 }
 
 func (r *RequestVoteArgs) String() string {
-	return fmt.Sprintf("T:%d Candidate:S%d", r.Term, r.CandidateId)
+	return fmt.Sprintf("{T:%d Candidate:S%d LastLog[%d,%d]}", r.Term, r.CandidateId, r.LastLogIndex, r.LastLogTerm)
 }
 
 func (r *RequestVoteReply) String() string {
-	return fmt.Sprintf("T:%d Vote:%t", r.Term, r.VoteGranted)
+	return fmt.Sprintf("{T:%d Vote:%t}", r.Term, r.VoteGranted)
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -58,7 +60,7 @@ func (r *RequestVoteReply) String() string {
 // that the caller passes the address of the reply struct with &, not
 // the struct itself.
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
-	Debug(dVote, "S%d RV -> S%d arg %v", rf.me, server, args)
+	Debug(dVote, "S%d RV -> S%d, arg %+v", rf.me, server, args)
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	return ok
 }
@@ -68,34 +70,35 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	// got stale vote request, reject
 	reply.VoteGranted = false
+	
+	if rf.currentTerm < args.Term {
+			rf.becomeFollowerL(args.Term)
+			//rf.SetElectionTimer()
+		}
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		return
-	}
-	// for all server, when receving rpc with new Term,
-	// convert to follower
-	if rf.currentTerm < args.Term {
-		rf.becomeFollowerL(args.Term)
-	}
-	// todo why to check rf.voteFor == args.CandidateId
-	if rf.currentTerm == args.Term &&
-		(rf.voteFor == -1 || rf.voteFor == args.CandidateId) {
-		rf.voteFor = args.CandidateId
-		reply.VoteGranted = true
-		rf.SetElectionTimer()
+	}else if rf.currentTerm == args.Term  {
+		uptodate := (args.LastLogTerm > rf.log.lastTerm()) ||
+		((args.LastLogTerm == rf.log.lastTerm()) && (args.LastLogIndex >= rf.log.lastIndex()))
+		if (rf.voteFor == -1 || rf.voteFor == args.CandidateId) && uptodate {
+			rf.voteFor = args.CandidateId
+			reply.VoteGranted = true
+			rf.SetElectionTimer()
+		}
 	}
 	reply.Term = rf.currentTerm
-	Debug(dVote, "S%d RV -> S%d, reply %v", rf.me, args.CandidateId, reply)
+	Debug(dVote, "S%d RV -> S%d, reply %+v", rf.me, args.CandidateId, reply)
 
 }
 func (rf *Raft) SendRequestVotesL() {
 	args := RequestVoteArgs{
-		Term:        rf.currentTerm,
-		CandidateId: rf.me,
+		Term:         rf.currentTerm,
+		CandidateId:  rf.me,
+		LastLogIndex: rf.log.lastIndex(),
+		LastLogTerm:  rf.log.lastTerm(),
 	}
-
 	voteCounter := 1
 
 	for peer := range rf.peers {
@@ -112,9 +115,11 @@ func (rf *Raft) SendRequestVote(peer int, args RequestVoteArgs, voteCounter *int
 	ok := rf.sendRequestVote(peer, &args, &reply)
 	if ok {
 		rf.mu.Lock()
+		defer rf.mu.Unlock()
 		Debug(dVote, "S%d <- RV S%d, got reply", rf.me, peer)
 		if reply.Term > rf.currentTerm {
 			rf.becomeFollowerL(reply.Term)
+			return 
 		}
 		// check whether we are still in the same term and this peer is still candidate
 		sameTermAndState := (args.Term == rf.currentTerm && rf.state == candidate)
@@ -124,7 +129,6 @@ func (rf *Raft) SendRequestVote(peer int, args RequestVoteArgs, voteCounter *int
 				rf.becomeLeaderL()
 			}
 		}
-		rf.mu.Unlock()
 	}
 
 }

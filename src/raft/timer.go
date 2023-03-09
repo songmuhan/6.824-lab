@@ -10,14 +10,14 @@ import (
 
 const (
 	ElectionTimeMin      = 200
-	ElectionTimeInterval = 150
-	HeartBeatInterval    = 35
+	ElectionTimeInterval = 200
+	HeartBeatInterval    = 50
 )
 
 func (rf *Raft) SetElectionTimer() {
 	Debug(dTimer, "S%d set election timer at T:%d", rf.me, rf.currentTerm)
-	ms := time.Duration(ElectionTimeMin+rand.Int63()%ElectionTimeInterval) * time.Millisecond
 	t := time.Now()
+	ms := time.Duration(ElectionTimeMin+rand.Int63()%ElectionTimeInterval) * time.Millisecond
 	rf.electionTime = t.Add(ms)
 }
 
@@ -27,13 +27,10 @@ func (rf *Raft) tick() {
 	//	Debug(dTimer, "S%d tiker check at T:%d", rf.me, rf.currentTerm)
 	if rf.state == leader {
 		rf.SetElectionTimer()
-		rf.SendAppendsL()
+		rf.SendAppendsL(true)
 	}
 	if time.Now().After(rf.electionTime) {
-		if rf.state == candidate || rf.state == follower {
-			//			Debug(dTimer, "S%d election times out !", rf.me)
-			rf.startElectionL()
-		}
+		rf.startElectionL()
 	}
 }
 

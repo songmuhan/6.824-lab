@@ -16,7 +16,7 @@ func (rf *Raft) becomeFollowerL(term int) {
 	rf.state = follower
 	rf.currentTerm = term
 	rf.voteFor = -1
-	rf.SetElectionTimer()
+//	rf.SetElectionTimer()
 }
 
 func (rf *Raft) becomeLeaderL() {
@@ -26,6 +26,16 @@ func (rf *Raft) becomeLeaderL() {
 		panic(msg)
 	}
 	rf.state = leader
-	rf.SetElectionTimer()
-	rf.SendAppendsL() // issue heartbeat
+//	rf.SetElectionTimer()
+
+	// initialize nextIndex and matchIndex
+	for peer := range rf.peers {
+		if peer != rf.me {
+			// initialized to leader last log index + 1
+			rf.nextIndex[peer] = rf.log.lastIndex() + 1
+			// initialized to 0, increase monotonically
+			rf.matchIndex[peer] = 0
+		}
+	}
+	rf.SendAppendsL(false) // issue heartbeat
 }
