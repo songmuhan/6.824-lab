@@ -52,3 +52,27 @@ func (l *Log) len() int {
 func (l *Log) append(entry Entry) {
 	l.Entries = append(l.Entries, entry)
 }
+
+func (l *Log) getFirstIndexofTerm(term int) int {
+	for i, entry := range l.Entries {
+		if entry.Term == term {
+			return i
+		}
+	}
+	return -1
+}
+
+func (l *Log) getLastIndexofTerm(term int) int {
+	first := l.getFirstIndexofTerm(term)
+	if first != -1 {
+		for i, entry := range l.Entries[first:] {
+			if entry.Term != term {
+				if i != len(l.Entries[first:])-1 {
+					return i
+				}
+				return -1
+			}
+		}
+	}
+	return -1
+}

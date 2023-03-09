@@ -24,6 +24,10 @@ type AppendEntrisArgs struct {
 type AppendEntrisReply struct {
 	Term    int  // currentTerm, for leader to update itself
 	Success bool // true, if follower contained entry matching PrevLogIndex and PreLogTerm
+	// for quickly back up nextIndex
+	XTerm  int // term in the conflicting entry
+	XIndex int // index of first entry with that term
+	XLen   int // log Length
 }
 
 func (a AppendEntrisArgs) String() string {
@@ -38,46 +42,57 @@ func (a AppendEntrisArgs) String() string {
 }
 
 func (a AppendEntrisReply) String() string {
-	str := fmt.Sprintf("{T:%d", a.Term)
+	str := fmt.Sprintf("T:%d", a.Term)
 	if a.Success {
-		str += " Success}"
+		str += " Success"
 	} else {
-		str += " Fail}"
+		str += " Fail"
 	}
+	Xstr := fmt.Sprintf(" X{T:%d I:%d L:%d}", a.XTerm, a.XIndex, a.XLen)
+	str += Xstr
 	return str
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	Debug(dInfo, "S%d before AE log: %+v", rf.me, rf.log)
+	Debug(dInfo, "S%d before AE log: %+v", rf.me, rf.Log)
 	// do we need to consider this situation
 	reply.Success = false
-	if args.Term < rf.currentTerm {
-		reply.Term = rf.currentTerm
+	reply.XTerm = -1
+	reply.XIndex = -1
+	reply.XLen = -1
+	if args.Term < rf.CurrentTerm {
+		reply.Term = rf.CurrentTerm
 		return
 	}
-	if args.Term > rf.currentTerm {
+	if args.Term > rf.CurrentTerm {
 		rf.becomeFollowerL(args.Term)
 	}
-	if args.Term == rf.currentTerm {
+	if args.Term == rf.CurrentTerm {
 		rf.SetElectionTimer()
-		if rf.log.len() <= args.PrevLogIndex || rf.log.entry(args.PrevLogIndex).Term != args.PrevLogTerm {
-			Debug(dInfo, "S%d not match PrevLogIndex&Term", rf.me)
-			reply.Term = rf.currentTerm
+		if rf.Log.len() <= args.PrevLogIndex {
+			Debug(dInfo, "S%d not match: cuz log is too short", rf.me)
+			reply.XLen = rf.Log.lastIndex()
+			return
+		} else if rf.Log.entry(args.PrevLogIndex).Term != args.PrevLogTerm {
+			Debug(dInfo, "S%d not match: cuz conflict", rf.me)
+			term := rf.Log.term(args.PrevLogIndex)
+			reply.XTerm = term
+			reply.XIndex = rf.Log.getFirstIndexofTerm(term)
 			return
 		} else {
 			Debug(dError, "S%d match PreLog{Idx:%d,T:%d}", rf.me, args.PrevLogIndex, args.PrevLogTerm)
-			reply.Term = rf.currentTerm
+			reply.Term = rf.CurrentTerm
 			reply.Success = true
 			logInsertIndex := args.PrevLogIndex + 1
 			newEntriesIndex := 0
 
 			for {
-				if logInsertIndex >= rf.log.len() || newEntriesIndex >= args.Entries.len() {
+				if logInsertIndex >= rf.Log.len() || newEntriesIndex >= args.Entries.len() {
 					break
 				}
-				if rf.log.term(logInsertIndex) != args.Entries.term(newEntriesIndex) {
+				if rf.Log.term(logInsertIndex) != args.Entries.term(newEntriesIndex) {
 					break
 				}
 				logInsertIndex++
@@ -85,10 +100,11 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 			}
 
 			if newEntriesIndex < args.Entries.len() {
-				rf.log.Entries = append(rf.log.Entries[:logInsertIndex], args.Entries.Entries[newEntriesIndex:]...)
+				rf.Log.Entries = append(rf.Log.Entries[:logInsertIndex], args.Entries.Entries[newEntriesIndex:]...)
+				rf.persist()
 			}
 			if args.LeaderCommit > rf.commitIndex {
-				rf.commitIndex = min(args.LeaderCommit, rf.log.lastIndex())
+				rf.commitIndex = min(args.LeaderCommit, rf.Log.lastIndex())
 				Debug(dCommit, "S%d commit %d", rf.me, rf.commitIndex)
 				rf.cond.Signal()
 			}
@@ -96,7 +112,7 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 	}
 
 	Debug(dAppend, "S%d AE -> S%d, reply %+v", rf.me, args.LeaderId, reply)
-	Debug(dInfo, "S%d after  AE log: %+v", rf.me, rf.log)
+	Debug(dInfo, "S%d after  AE log: %+v", rf.me, rf.Log)
 }
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntrisArgs, reply *AppendEntrisReply) bool {
@@ -108,7 +124,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntrisArgs, reply *App
 func (rf *Raft) SendAppendsL(heartbeat bool) {
 	for i := 0; i < len(rf.peers); i++ {
 		if i != rf.me {
-			if rf.log.lastIndex() > rf.nextIndex[i] || heartbeat {
+			if rf.Log.lastIndex() > rf.nextIndex[i] || heartbeat {
 				go func(peer int) {
 					rf.sendAppend(peer, heartbeat)
 				}(i)
@@ -120,16 +136,16 @@ func (rf *Raft) makeAppendEntriesArg(peer int, heartbeat bool) AppendEntrisArgs 
 	rf.mu.Lock()
 	entries := Log{}
 	lastLogIndex := rf.nextIndex[peer] - 1
-	if lastLogIndex < len(rf.log.Entries)-1 {
+	if lastLogIndex < len(rf.Log.Entries)-1 {
 		// do we need deep copy here ??
-		entries.Entries = make([]Entry, len(rf.log.Entries[lastLogIndex+1:]))
-		copy(entries.Entries, rf.log.Entries[lastLogIndex+1:])
+		entries.Entries = make([]Entry, len(rf.Log.Entries[lastLogIndex+1:]))
+		copy(entries.Entries, rf.Log.Entries[lastLogIndex+1:])
 	}
 	args := AppendEntrisArgs{
-		Term:         rf.currentTerm,
+		Term:         rf.CurrentTerm,
 		LeaderId:     rf.me,
 		PrevLogIndex: lastLogIndex,
-		PrevLogTerm:  rf.log.term(lastLogIndex),
+		PrevLogTerm:  rf.Log.term(lastLogIndex),
 		Entries:      entries,
 		LeaderCommit: rf.commitIndex,
 	}
@@ -143,7 +159,7 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 	lastLogIndex := args.PrevLogIndex
 	reply := AppendEntrisReply{}
 	rf.mu.Lock()
-	sameTermAndState := args.Term == rf.currentTerm && rf.state == leader
+	sameTermAndState := args.Term == rf.CurrentTerm && rf.state == leader
 	rf.mu.Unlock()
 	if sameTermAndState {
 		ok := rf.sendAppendEntries(peer, &args, &reply)
@@ -151,10 +167,10 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 			rf.mu.Lock()
 			defer rf.mu.Unlock()
 			Debug(dAppend, "S%d <- AE S%d,got reply %+v", rf.me, peer, reply)
-			if reply.Term > rf.currentTerm {
+			if reply.Term > rf.CurrentTerm {
 				rf.becomeFollowerL(reply.Term)
 				return
-			} else if args.Term == rf.currentTerm {
+			} else if args.Term == rf.CurrentTerm {
 				if reply.Success {
 					nextIndex := lastLogIndex + args.Entries.len() + 1
 					matchIndex := lastLogIndex + args.Entries.len()
@@ -164,8 +180,8 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 					if matchIndex > rf.matchIndex[peer] {
 						rf.matchIndex[peer] = matchIndex
 					}
-					for index := args.LeaderCommit + 1; index <= rf.log.lastIndex(); index++ {
-						if rf.log.term(index) == rf.currentTerm {
+					for index := args.LeaderCommit + 1; index <= rf.Log.lastIndex(); index++ {
+						if rf.Log.term(index) == rf.CurrentTerm {
 							counter := 1 // leader has a count
 							for peer := range rf.peers {
 								if peer != rf.me {
@@ -183,10 +199,23 @@ func (rf *Raft) sendAppend(peer int, heartbeat bool) {
 						}
 					}
 				} else {
-					if rf.nextIndex[peer] > 1 {
+					if reply.XTerm != -1 {
+						if rf.Log.getLastIndexofTerm(reply.XTerm) != -1 {
+							rf.nextIndex[peer] = rf.Log.getLastIndexofTerm(reply.XTerm)
+						} else {
+							rf.nextIndex[peer] = reply.XIndex
+						}
+					} else if reply.XLen != -1 {
+						rf.nextIndex[peer] = reply.XLen
+					} else if rf.nextIndex[peer] > 1 {
 						rf.nextIndex[peer] -= 1
-						Debug(dAppend, "S%d decrease S%d nextIndex to %d", rf.me, peer, rf.nextIndex[peer])
 					}
+
+					if rf.nextIndex[peer] <= 0 {
+						rf.nextIndex[peer] = 1
+					}
+					Debug(dAppend, "S%d decrease S%d nextIndex to %d", rf.me, peer, rf.nextIndex[peer])
+
 				}
 
 			}

@@ -15,7 +15,7 @@ const (
 )
 
 func (rf *Raft) SetElectionTimer() {
-	Debug(dTimer, "S%d set election timer at T:%d", rf.me, rf.currentTerm)
+	Debug(dTimer, "S%d set election timer at T:%d", rf.me, rf.CurrentTerm)
 	t := time.Now()
 	ms := time.Duration(ElectionTimeMin+rand.Int63()%ElectionTimeInterval) * time.Millisecond
 	rf.electionTime = t.Add(ms)
