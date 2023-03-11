@@ -193,7 +193,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		Command: command,
 		Term:    rf.CurrentTerm,
 	})
-//	rf.persist()
+	rf.persist()
 	Debug(dError, "S%d: start called, [%d,%d]", rf.me, command, rf.CurrentTerm)
 	rf.SendAppendsL(true)
 	return rf.Log.lastIndex(), rf.CurrentTerm, true

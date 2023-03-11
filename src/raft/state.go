@@ -17,7 +17,7 @@ func (rf *Raft) becomeFollowerL(term int) {
 	rf.CurrentTerm = term
 	rf.VoteFor = -1
 	// rf.SetElectionTimer()
-	// rf.persist()
+	rf.persist()
 }
 
 func (rf *Raft) becomeLeaderL() {

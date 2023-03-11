@@ -84,7 +84,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			((args.LastLogTerm == rf.Log.lastTerm()) && (args.LastLogIndex >= rf.Log.lastIndex()))
 		if (rf.VoteFor == -1 || rf.VoteFor == args.CandidateId) && uptodate {
 			rf.VoteFor = args.CandidateId
-		//	rf.persist()
+			rf.persist()
 			reply.VoteGranted = true
 			rf.SetElectionTimer()
 		}
@@ -138,7 +138,7 @@ func (rf *Raft) startElectionL() {
 	rf.state = candidate
 	rf.VoteFor = rf.me
 	rf.CurrentTerm++
-	// rf.persist()
+	rf.persist()
 	rf.SetElectionTimer()
 	Debug(dVote, "S%d start new election at T:%d", rf.me, rf.CurrentTerm)
 	rf.SendRequestVotesL()

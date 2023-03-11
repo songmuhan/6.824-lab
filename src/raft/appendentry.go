@@ -101,7 +101,7 @@ func (rf *Raft) AppendEntries(args *AppendEntrisArgs, reply *AppendEntrisReply) 
 
 			if newEntriesIndex < args.Entries.len() {
 				rf.Log.Entries = append(rf.Log.Entries[:logInsertIndex], args.Entries.Entries[newEntriesIndex:]...)
-			//	rf.persist()
+				rf.persist()
 			}
 			if args.LeaderCommit > rf.commitIndex {
 				rf.commitIndex = min(args.LeaderCommit, rf.Log.lastIndex())
