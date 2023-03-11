@@ -140,6 +140,10 @@ func (rf *Raft) makeAppendEntriesArg(peer int, heartbeat bool) AppendEntrisArgs 
 		// do we need deep copy here ??
 		entries.Entries = make([]Entry, len(rf.Log.Entries[lastLogIndex+1:]))
 		copy(entries.Entries, rf.Log.Entries[lastLogIndex+1:])
+	}else {
+		// leader's log is short
+		lastLogIndex = rf.Log.lastIndex()
+		Debug(dError,"S%d log is short!",rf.me);
 	}
 	args := AppendEntrisArgs{
 		Term:         rf.CurrentTerm,

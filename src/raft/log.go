@@ -18,7 +18,7 @@ func (l Log) String() string {
 	start := 0
 	if len(l.Entries) > 5 {
 		start = len(l.Entries) - 5
-		str = fmt.Sprintf("%d: ...", len(l.Entries))
+		str = fmt.Sprintf("{%d: ...", len(l.Entries))
 	}
 	for _, entry := range l.Entries[start:] {
 		cmd := fmt.Sprintf("%+v", entry.Command)
@@ -27,6 +27,7 @@ func (l Log) String() string {
 		}
 		str += fmt.Sprintf("[%4s %d]", cmd, entry.Term)
 	}
+	str += "}"
 	return str
 }
 
@@ -47,7 +48,14 @@ func (l *Log) lastTerm() int {
 }
 
 func (l *Log) term(index int) int {
-	return l.Entries[index].Term
+	if index < len(l.Entries){
+		return l.Entries[index].Term
+	}else{
+		// this should not happen in any circmustance
+		str:= fmt.Sprintf("log out of index, this should never happen")
+		Panic(str)
+	}
+	return -1
 }
 
 func (l *Log) len() int {
