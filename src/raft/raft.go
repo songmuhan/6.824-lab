@@ -20,11 +20,13 @@ package raft
 import (
 	//	"bytes"
 
+	"bytes"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	//	"6.5840/labgob"
+	"6.5840/labgob"
 	"6.5840/labrpc"
 )
 
@@ -63,9 +65,9 @@ type Raft struct {
 	applyCh chan ApplyMsg
 	cond    sync.Cond
 	//persistent state on all servers
-	currentTerm int
-	voteFor     int
-	log         Log
+	CurrentTerm int
+	VoteFor     int
+	Log         Log
 	// volatile state on all servers
 	commitIndex int
 	lastApplied int
@@ -85,7 +87,7 @@ func (rf *Raft) GetState() (int, bool) {
 	var isleader bool
 	// Your code here (2A).
 	rf.mu.Lock()
-	term = rf.currentTerm
+	term = rf.CurrentTerm
 	isleader = (rf.state == leader)
 	rf.mu.Unlock()
 	return term, isleader
@@ -107,6 +109,18 @@ func (rf *Raft) persist() {
 	// e.Encode(rf.yyy)
 	// raftstate := w.Bytes()
 	// rf.persister.Save(raftstate, nil)
+
+	// persist are called with lock
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.CurrentTerm)
+	e.Encode(rf.VoteFor)
+	e.Encode(rf.Log)
+	raftstate := w.Bytes()
+	//	rf.mu.Unlock()
+	//	Debug(dError, "S%d can I grab the lock ?", rf.me)
+	rf.persister.Save(raftstate, nil)
+	// rf.mu.Lock()
 }
 
 // restore previously persisted state.
@@ -127,6 +141,23 @@ func (rf *Raft) readPersist(data []byte) {
 	//   rf.xxx = xxx
 	//   rf.yyy = yyy
 	// }
+	rf.mu.Lock()
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var voteFor int
+	var log Log
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&voteFor) != nil ||
+		d.Decode(&log) != nil {
+		Debug(dError, "S%d fail readPersist", rf.me)
+	} else {
+		rf.CurrentTerm = currentTerm
+		rf.VoteFor = voteFor
+		rf.Log = log
+	}
+	rf.mu.Unlock()
+
 }
 
 // the service says it has created a snapshot that has
@@ -156,15 +187,16 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	defer rf.mu.Unlock()
 
 	if rf.state != leader {
-		return -1, rf.currentTerm, false
+		return -1, rf.CurrentTerm, false
 	}
-	rf.log.append(Entry{
+	rf.Log.append(Entry{
 		Command: command,
-		Term:    rf.currentTerm,
+		Term:    rf.CurrentTerm,
 	})
-	Debug(dError, "S%d: start called, log:%+v", rf.me, rf.log)
+//	rf.persist()
+	Debug(dError, "S%d: start called, [%d,%d]", rf.me, command, rf.CurrentTerm)
 	rf.SendAppendsL(true)
-	return rf.log.lastIndex(), rf.currentTerm, true
+	return rf.Log.lastIndex(), rf.CurrentTerm, true
 }
 
 // the tester doesn't halt goroutines created by Raft after each test,
@@ -204,10 +236,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// Your initialization code here (2A, 2B, 2C).
 	rf.applyCh = applyCh
 	rf.cond = *sync.NewCond(&rf.mu)
-	rf.currentTerm = 0
-	rf.voteFor = -1
-	rf.log.Entries = make([]Entry, 0)
-	rf.log.makeEmptyLog()
+	rf.CurrentTerm = 0
+	rf.VoteFor = -1
+	rf.Log.Entries = make([]Entry, 0)
+	rf.Log.makeEmptyLog()
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
 	rf.commitIndex = 0
@@ -235,18 +267,17 @@ func (rf *Raft) applier() {
 		}
 
 		var i int
-		for i = rf.lastApplied + 1; i <= rf.commitIndex && i < rf.log.len(); i++ {
+		for i = rf.lastApplied + 1; i <= rf.commitIndex && i < rf.Log.len(); i++ {
 			am := ApplyMsg{
 				CommandValid: true,
 				CommandIndex: i,
-				Command:      rf.log.entry(i).Command,
+				Command:      rf.Log.entry(i).Command,
 			}
-			Debug(dCommit, "S%d apply %d", rf.me, am.CommandIndex)
+			//			Debug(dCommit, "S%d apply %d", rf.me, am.CommandIndex)
 			rf.applyCh <- am
 			rf.lastApplied++
-			Debug(dCommit, "S%d inc lastApplied ->%d", rf.me, rf.lastApplied)
 		}
-
+		Debug(dCommit, "S%d inc lastApplied ->%d", rf.me, rf.lastApplied)
 		rf.mu.Unlock()
 
 	}
