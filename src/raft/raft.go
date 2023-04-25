@@ -195,7 +195,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	})
 	rf.persist()
 	Debug(dError, "S%d: start called, [%d,%d]", rf.me, command, rf.CurrentTerm)
-	rf.SendAppendsL(true)
+	rf.SendAppendsL()
 	return rf.Log.lastIndex(), rf.CurrentTerm, true
 }
 

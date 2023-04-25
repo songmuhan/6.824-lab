@@ -48,11 +48,11 @@ func (l *Log) lastTerm() int {
 }
 
 func (l *Log) term(index int) int {
-	if index < len(l.Entries){
+	if index < len(l.Entries) {
 		return l.Entries[index].Term
-	}else{
+	} else {
 		// this should not happen in any circmustance
-		str:= fmt.Sprintf("log out of index, this should never happen")
+		str := fmt.Sprintf("log out of index, this should never happen")
 		Panic(str)
 	}
 	return -1
@@ -80,10 +80,11 @@ func (l *Log) getLastIndexofTerm(term int) int {
 	if first != -1 {
 		for i, entry := range l.Entries[first:] {
 			if entry.Term != term {
-				if i != len(l.Entries[first:])-1 {
-					return i
-				}
-				return -1
+				// if i != len(l.Entries[first:])-1 {
+				// 	return i - 1
+				// }
+				// return 1
+				return i - 1
 			}
 		}
 	}

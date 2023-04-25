@@ -121,18 +121,16 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntrisArgs, reply *App
 	return ok
 }
 
-func (rf *Raft) SendAppendsL(heartbeat bool) {
+func (rf *Raft) SendAppendsL() {
 	for i := 0; i < len(rf.peers); i++ {
 		if i != rf.me {
-			if rf.Log.lastIndex() > rf.nextIndex[i] || heartbeat {
-				go func(peer int) {
-					rf.sendAppend(peer, heartbeat)
-				}(i)
-			}
+			go func(peer int) {
+				rf.sendAppend(peer)
+			}(i)
 		}
 	}
 }
-func (rf *Raft) makeAppendEntriesArg(peer int, heartbeat bool) AppendEntrisArgs {
+func (rf *Raft) makeAppendEntriesArg(peer int) AppendEntrisArgs {
 	rf.mu.Lock()
 	entries := Log{}
 	lastLogIndex := rf.nextIndex[peer] - 1
@@ -140,10 +138,10 @@ func (rf *Raft) makeAppendEntriesArg(peer int, heartbeat bool) AppendEntrisArgs 
 		// do we need deep copy here ??
 		entries.Entries = make([]Entry, len(rf.Log.Entries[lastLogIndex+1:]))
 		copy(entries.Entries, rf.Log.Entries[lastLogIndex+1:])
-	}else {
+	} else {
 		// leader's log is short
 		lastLogIndex = rf.Log.lastIndex()
-		Debug(dError,"S%d log is short!",rf.me);
+		Debug(dError, "S%d log is short!", rf.me)
 	}
 	args := AppendEntrisArgs{
 		Term:         rf.CurrentTerm,
@@ -157,9 +155,9 @@ func (rf *Raft) makeAppendEntriesArg(peer int, heartbeat bool) AppendEntrisArgs 
 	return args
 }
 
-func (rf *Raft) sendAppend(peer int, heartbeat bool) {
+func (rf *Raft) sendAppend(peer int) {
 	// construct the args of AppendEntries
-	args := rf.makeAppendEntriesArg(peer, heartbeat)
+	args := rf.makeAppendEntriesArg(peer)
 	lastLogIndex := args.PrevLogIndex
 	reply := AppendEntrisReply{}
 	rf.mu.Lock()

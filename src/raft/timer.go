@@ -27,7 +27,7 @@ func (rf *Raft) tick() {
 	//	Debug(dTimer, "S%d tiker check at T:%d", rf.me, rf.currentTerm)
 	if rf.state == leader {
 		rf.SetElectionTimer()
-		rf.SendAppendsL(true)
+		rf.SendAppendsL()
 	}
 	if time.Now().After(rf.electionTime) {
 		rf.startElectionL()
